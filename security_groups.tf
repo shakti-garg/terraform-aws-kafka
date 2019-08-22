@@ -17,20 +17,20 @@ resource "aws_security_group" "kafka_broker" {
   vpc_id      = "${var.vpc_id}"
 
   ingress {
-    from_port   = 8083
-    to_port     = 8083
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = "${concat([var.vpc_cidr], var.whitelist_ips)}"
   }
 
-  egress {
+  ingress {
+    from_port   = 19092
+    to_port     = 19092
+    protocol    = "tcp"
+    self = true
+  }
+
+    egress {
     from_port       = 0
     to_port         = 0
     protocol        = "-1"
@@ -47,7 +47,21 @@ resource "aws_security_group" "zookeeper_node" {
     from_port   = 2181
     to_port     = 2181
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = "${concat([var.vpc_cidr], var.whitelist_ips)}"
+  }
+
+  ingress {
+    from_port   = 2888
+    to_port     = 2888
+    protocol    = "tcp"
+    self = true
+  }
+
+  ingress {
+    from_port   = 3888
+    to_port     = 3888
+    protocol    = "tcp"
+    self = true
   }
 
   egress {

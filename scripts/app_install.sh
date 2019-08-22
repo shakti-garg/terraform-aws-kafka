@@ -1,8 +1,12 @@
 #!/bin/bash
-set -e
+
+set -x
 
 #print input parameters
 echo ${app_types}
+echo ${region}
+echo ${kafka_autoscaling_group_name}
+echo ${zookeeper_quorum}
 
 function install_confluent() {
     yum update -y
@@ -48,17 +52,77 @@ function updateConfig() {
 echo "Installing Confluent Platform - Community Edition..."
 install_confluent
 
+ZK_CFG="/etc/kafka/zookeeper.properties"
+BROKER_CFG="/etc/kafka/server.properties"
+LOG4J_CFG="/etc/kafka/log4j.properties"
+
+# wait for hostname creation due to delay in DNS resolution
+while [ -z "$THIS_HOST" ] ; do
+  sleep 3
+  THIS_HOST=$(hostname)
+done
+
+aws ec2 describe-instances --output text --region "${region}" \
+  --filters 'Name=instance-state-name,Values=running,stopped' \
+  --query 'Reservations[].Instances[].[PrivateDnsName,InstanceId,LaunchTime,AmiLaunchIndex,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
+  | grep -w "${kafka_autoscaling_group_name}" | sort -k 3,4 \
+  | awk '{print $1}' > /tmp/broker
+
+
 for app in $(echo ${app_types} | sed "s/,/ /g")
 do
     if [ "$app" == "kafka_broker" ]; then
+        export KAFKA_ZOOKEEPER_CONNECT="$zkconnect"
         export KAFKA_ADVERTISED_LISTENERS="INSIDE://:19092,OUTSIDE://$(curl http://169.254.169.254/latest/meta-data/public-ipv4):9092"
         export KAFKA_LISTENERS="INSIDE://:19092,OUTSIDE://:9092"
         export KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT"
         export KAFKA_INTER_BROKER_LISTENER_NAME="INSIDE"
 
-        cmd=$cmd"(kafka-server-start /etc/kafka/server.properties 2>&1 > /var/log/kafka.log  &); sleep 5;"
+        brokers=$(awk '{print $1}' /tmp/broker)
+
+        myid=-1
+        bkid=0
+        for broker in $brokers ; do
+          [ $broker = $THIS_HOST ] && myid=$bkid
+		      bkid=$[bkid+1]
+        done
+
+        export KAFKA_BROKER_ID="$myid"
+
+        cmd=$cmd"(kafka-server-start $BROKER_CFG 2>&1 > /var/log/kafka.log  &); sleep 5;"
     elif [ "$app" == "zookeeper_node" ]; then
-        cmd=$cmd"(zookeeper-server-start /etc/kafka/zookeeper.properties > /var/log/zookeeper.log &); sleep 5;"
+        grep -q ^initLimit "$ZK_CFG"
+        [ $? -ne 0 ] && echo "initLimit=5" >> "$ZK_CFG"
+
+        grep -q ^syncLimit "$ZK_CFG"
+        [ $? -ne 0 ] && echo "syncLimit=2" >> "$ZK_CFG"
+
+        zknodes=$(awk '{print $1}' /tmp/broker)
+
+        myid=0
+        zkid=1
+        for znode in $zknodes ; do
+          #var=ZOOKEEPER_SERVER_$zkid
+          #printf -v $var "$znode:2888:3888"
+          #export $var
+          echo "server.$zkid=$znode:2888:3888" >> "$ZK_CFG"
+
+          [ $znode = $THIS_HOST ] && myid=$zkid
+          zkid=$[zkid+1]
+
+          #create quorum url
+          if [ -z "$zkconnect" ] ; then
+            zkconnect="$znode:2181"
+          else
+            zkconnect="$zkconnect,$znode:2181"
+          fi
+        done
+
+        if [ $myid -gt 0 ] ; then
+          echo $myid > /var/lib/zookeeper/myid
+        fi
+
+        cmd=$cmd"(zookeeper-server-start $ZK_CFG > /var/log/zookeeper.log &); sleep 5;"
     else
         echo "Invalid application type: $app"
         exit 1
@@ -79,12 +143,17 @@ do
 
     if [[ $env_var =~ ^KAFKA_ ]]; then
         kafka_name=$(echo "$env_var" | cut -d_ -f2- | tr '[:upper:]' '[:lower:]' | tr _ .)
-        updateConfig "$kafka_name" "$${!env_var}" "/etc/kafka/server.properties"
+        updateConfig "$kafka_name" "$${!env_var}" "$BROKER_CFG"
     fi
 
     if [[ $env_var =~ ^LOG4J_ ]]; then
         log4j_name=$(echo "$env_var" | tr '[:upper:]' '[:lower:]' | tr _ .)
-        updateConfig "$log4j_name" "$${!env_var}" "/etc/kafka/log4j.properties"
+        updateConfig "$log4j_name" "$${!env_var}" "$LOG4J_CFG"
+    fi
+
+    if [[ $env_var =~ ^ZOOKEEPER_ ]]; then
+        zk_name=$(echo "$env_var" | tr '[:upper:]' '[:lower:]' | tr _ .)
+        updateConfig "$zk_name" "$${!env_var}" "$ZK_CFG"
     fi
 done
 

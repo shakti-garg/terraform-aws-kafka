@@ -22,3 +22,24 @@ resource "aws_iam_role" "ec2_role" {
 }
 EOF
 }
+
+resource "aws_iam_role_policy" "ec2_role_policy" {
+  name = "${var.name}-broker-role-policy"
+  role = "${aws_iam_role.ec2_role.id}"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Resource": "*",
+            "Action": [
+                "ec2:CreateTags",
+                "ec2:DescribeInstances"
+            ]
+        }
+    ]
+}
+EOF
+}

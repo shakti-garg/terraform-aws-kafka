@@ -10,6 +10,10 @@ variable "vpc_id" {
   type	= string
 }
 
+variable "vpc_cidr" {
+  type	= string
+}
+
 variable "vpc_subnet_ids" {
   type  = list
 }
@@ -34,20 +38,12 @@ variable "broker_node_instancetype" {
   default = "m4.xlarge"
 }
 
-variable "num_zookeepers" {
-  default = 0
-}
-
-variable "zookeeper_node_ami" {
-  type  = string
-}
-
-variable "zookeeper_node_instance_type" {
-  default = "t2.micro"
+variable "zookeeper_quorum" {
+  default = ""
 }
 
 variable "tags" {
-  description = "A map of tags to add to all resources"
-  type        = map(string)
-  default     = {}
+  description = "A list of tag blocks. Each element should have keys named key, value, and propagate_at_launch."
+  type        = list(map(string))
+  default     = []
 }
