@@ -7,6 +7,7 @@ data "template_file" "user_data_kafka_broker" {
     app_types = "${var.zookeeper_quorum == "" ? "zookeeper_node,kafka_broker" : "kafka_broker"}"
     region    = "${data.aws_region.current.name}"
     kafka_autoscaling_group_name = "${var.name}-kafka-cluster"
+    num_brokers = "${var.num_brokers}"
     zookeeper_quorum = "${var.zookeeper_quorum}"
   }
 }

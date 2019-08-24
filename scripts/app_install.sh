@@ -6,6 +6,7 @@ set -x
 echo ${app_types}
 echo ${region}
 echo ${kafka_autoscaling_group_name}
+echo ${num_brokers}
 echo ${zookeeper_quorum}
 
 function install_confluent() {
@@ -62,12 +63,23 @@ while [ -z "$THIS_HOST" ] ; do
   THIS_HOST=$(hostname)
 done
 
+#wait for all brokers to be running
 aws ec2 describe-instances --output text --region "${region}" \
-  --filters 'Name=instance-state-name,Values=running,stopped' \
-  --query 'Reservations[].Instances[].[PrivateDnsName,InstanceId,LaunchTime,AmiLaunchIndex,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
-  | grep -w "${kafka_autoscaling_group_name}" | sort -k 3,4 \
-  | awk '{print $1}' > /tmp/broker
+  --filters 'Name=instance-state-name,Values=running' \
+  --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
+  | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
+  | awk '{print $2}' > /tmp/broker
 
+while [ $(wc -l /tmp/broker) != "${num_brokers}" ]
+do
+    sleep 5
+
+    aws ec2 describe-instances --output text --region "${region}" \
+      --filters 'Name=instance-state-name,Values=running' \
+      --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
+      | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
+      | awk '{print $2}' > /tmp/broker
+done
 
 for app in $(echo ${app_types} | sed "s/,/ /g")
 do
