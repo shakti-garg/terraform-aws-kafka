@@ -8,11 +8,11 @@ data "template_file" "user_data_kafka_broker" {
   template = "${file("${path.module}/scripts/app_install.sh")}"
 
   vars = {
-    app_types = "${var.zookeeper_quorum == "" ? "zookeeper_node,kafka_broker" : "kafka_broker"}"
     region    = "${data.aws_region.current.name}"
     kafka_autoscaling_group_name = "${var.name}-kafka-cluster"
     num_brokers = "${var.num_brokers}"
     zookeeper_quorum = "${var.zookeeper_quorum}"
+    num_embedded_zks = "${var.zookeeper_quorum == "" ? (var.num_brokers >= 3 ? 3 : 1) : 0}"
   }
 }
 

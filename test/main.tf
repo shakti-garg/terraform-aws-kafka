@@ -22,7 +22,7 @@ module "kafka_cluster" {
   vpc_subnet_ids  = "${module.vpc.public_subnets}"
   whitelist_cidrs  = ["171.61.137.17/32","14.142.34.138/32"]
   keypair_name  = "shakti"
-  num_brokers = 3
+  num_brokers = 2
   broker_node_linux_ami = "ami-0b898040803850657"
   broker_node_instancetype = "t3.medium"
   zookeeper_quorum = ""
