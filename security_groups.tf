@@ -7,7 +7,7 @@ resource "aws_security_group" "remote_ssh" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = "${var.whitelist_ips}"
+    cidr_blocks = "${var.whitelist_cidrs}"
   }
 }
 
@@ -20,7 +20,7 @@ resource "aws_security_group" "kafka_broker" {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
-    cidr_blocks = "${concat([var.vpc_cidr], var.whitelist_ips)}"
+    cidr_blocks = "${concat([data.aws_vpc.current.cidr_block], var.whitelist_cidrs)}"
   }
 
   ingress {
@@ -47,7 +47,7 @@ resource "aws_security_group" "zookeeper_node" {
     from_port   = 2181
     to_port     = 2181
     protocol    = "tcp"
-    cidr_blocks = "${concat([var.vpc_cidr], var.whitelist_ips)}"
+    cidr_blocks = "${concat([data.aws_vpc.current.cidr_block], var.whitelist_cidrs)}"
   }
 
   ingress {

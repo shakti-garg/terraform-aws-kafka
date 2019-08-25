@@ -1,5 +1,9 @@
 data "aws_region" "current" { }
 
+data "aws_vpc" "current" {
+  id = "${var.vpc_id}"
+}
+
 data "template_file" "user_data_kafka_broker" {
   template = "${file("${path.module}/scripts/app_install.sh")}"
 
@@ -53,11 +57,11 @@ resource "aws_autoscaling_group" "kafka_cluster" {
 
 resource "aws_launch_configuration" "broker_launch_config" {
   name_prefix   = "${var.name}-broker-"
-  image_id      = "${var.broker_node_ami}"
+  image_id      = "${var.broker_node_linux_ami}"
   instance_type = "${var.broker_node_instancetype}"
 
   associate_public_ip_address = true
-  key_name      = "${var.key_name}"
+  key_name      = "${var.keypair_name}"
   security_groups = "${var.zookeeper_quorum == "" ? [aws_security_group.remote_ssh.id, aws_security_group.kafka_broker.id, aws_security_group.zookeeper_node.id] : [aws_security_group.remote_ssh.id, aws_security_group.kafka_broker.id]}"
   iam_instance_profile = "${aws_iam_instance_profile.ec2_instance_profile.id}"
 

@@ -68,9 +68,9 @@ aws ec2 describe-instances --output text --region "${region}" \
   --filters 'Name=instance-state-name,Values=running' \
   --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
   | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
-  | awk '{print $2}' > /tmp/broker
+  | awk '{print $2}' > /tmp/brokers
 
-while [ $(wc -l /tmp/broker) != "${num_brokers}" ]
+while [ $(wc -l /tmp/brokers) != "${num_brokers}" ]
 do
     sleep 5
 
@@ -78,19 +78,19 @@ do
       --filters 'Name=instance-state-name,Values=running' \
       --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
       | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
-      | awk '{print $2}' > /tmp/broker
+      | awk '{print $2}' > /tmp/brokers
 done
 
 for app in $(echo ${app_types} | sed "s/,/ /g")
 do
     if [ "$app" == "kafka_broker" ]; then
-        export KAFKA_ZOOKEEPER_CONNECT="$zkconnect"
+        export KAFKA_ZOOKEEPER_CONNECT="${zookeeper_quorum}"
         export KAFKA_ADVERTISED_LISTENERS="INSIDE://:19092,OUTSIDE://$(curl http://169.254.169.254/latest/meta-data/public-ipv4):9092"
         export KAFKA_LISTENERS="INSIDE://:19092,OUTSIDE://:9092"
         export KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT"
         export KAFKA_INTER_BROKER_LISTENER_NAME="INSIDE"
 
-        brokers=$(awk '{print $1}' /tmp/broker)
+        brokers=$(awk '{print $1}' /tmp/brokers)
 
         myid=-1
         bkid=0
@@ -102,6 +102,7 @@ do
         export KAFKA_BROKER_ID="$myid"
 
         cmd=$cmd"(kafka-server-start $BROKER_CFG 2>&1 > /var/log/kafka.log  &); sleep 5;"
+
     elif [ "$app" == "zookeeper_node" ]; then
         grep -q ^initLimit "$ZK_CFG"
         [ $? -ne 0 ] && echo "initLimit=5" >> "$ZK_CFG"
@@ -109,7 +110,7 @@ do
         grep -q ^syncLimit "$ZK_CFG"
         [ $? -ne 0 ] && echo "syncLimit=2" >> "$ZK_CFG"
 
-        zknodes=$(awk '{print $1}' /tmp/broker)
+        zknodes=$(awk '{print $1}' /tmp/brokers)
 
         myid=0
         zkid=1
@@ -120,7 +121,6 @@ do
           echo "server.$zkid=$znode:2888:3888" >> "$ZK_CFG"
 
           [ $znode = $THIS_HOST ] && myid=$zkid
-          zkid=$[zkid+1]
 
           #create quorum url
           if [ -z "$zkconnect" ] ; then
@@ -128,6 +128,9 @@ do
           else
             zkconnect="$zkconnect,$znode:2181"
           fi
+          zookeeper_quorum=$zkconnect
+
+          zkid=$[zkid+1]
         done
 
         if [ $myid -gt 0 ] ; then
