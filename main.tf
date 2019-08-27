@@ -40,16 +40,8 @@ resource "aws_autoscaling_group" "kafka_cluster" {
   tags = concat(
     var.tags,
     [{
-        key                 = "Name"
-        value               = "${var.name}-kafka-broker"
-        propagate_at_launch = true
-      },{
         key                 = "project"
         value               = "${var.name}"
-        propagate_at_launch = true
-      },{
-        key                 = "app-type"
-        value               = "${var.zookeeper_quorum == "" ? "kafka-broker,embedded-zookeeper-node" : "kafka-broker"}"
         propagate_at_launch = true
     }]
    )

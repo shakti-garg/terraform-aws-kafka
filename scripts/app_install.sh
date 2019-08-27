@@ -58,9 +58,9 @@ BROKER_CFG="/etc/kafka/server.properties"
 LOG4J_CFG="/etc/kafka/log4j.properties"
 
 # wait for hostname creation due to delay in DNS resolution
-while [ -z "$THIS_HOST" ] ; do
+while [ -z "$myHostname" ] ; do
   sleep 3
-  THIS_HOST=$(hostname)
+  myHostname=$(hostname)
 done
 
 #wait for all brokers to be running
@@ -68,7 +68,7 @@ aws ec2 describe-instances --output text --region "${region}" \
   --filters 'Name=instance-state-name,Values=running' \
   --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
   | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
-  | awk '{print $2}' > /tmp/brokers
+  | awk '{print $1" "$2}' > /tmp/brokers
 
 while [ $(cat /tmp/brokers | wc -l) != "${num_brokers}" ]
 do
@@ -78,7 +78,7 @@ do
       --filters 'Name=instance-state-name,Values=running' \
       --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
       | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
-      | awk '{print $2}' > /tmp/brokers
+      | awk '{print $1" "$2}' > /tmp/brokers
 done
 
 #if embedded zookeeper quorum is required to be deployed
@@ -96,12 +96,12 @@ if [ "${zookeeper_quorum}" = "" ] ; then
       zkconnect="$zkconnect,$znode:2181"
     fi
 
-    [ $znode = $THIS_HOST ] && myid=$zkid
+    [ $znode = $myHostname ] && myid=$zkid
 
     zkServers=$zkServers"\n""server.$zkid=$znode:2888:3888"
 
     zkid=$[zkid+1]
-  done <<< $(awk '{print $1}' /tmp/zookeepers)
+  done <<< $(awk '{print $2}' /tmp/zookeepers)
 
   if [ $myid -gt 0 ] ; then
     #configure embedded zookeeper and prepare execution command
@@ -114,6 +114,8 @@ if [ "${zookeeper_quorum}" = "" ] ; then
     echo -e "$zkServers" >> "$ZK_CFG"
 
     echo $myid > /var/lib/zookeeper/myid
+
+    myApps=$myApps" zookeeper-node"
 
     cmd=$cmd"(zookeeper-server-start $ZK_CFG > /var/log/zookeeper.log &); sleep 5;"
   fi
@@ -131,15 +133,27 @@ export KAFKA_INTER_BROKER_LISTENER_NAME="INSIDE"
 
 myid=-1
 bkid=0
-for broker in $(awk '{print $1}' /tmp/brokers) ; do
-  [ $broker = $THIS_HOST ] && myid=$bkid
+while read brokerInstanceId brokerHost
+do
+  if [ $brokerHost = $myHostname ] ; then
+    myid=$bkid;
+    myInstanceId=$brokerInstanceId;
+    myApps=$myApps" kafka-broker"
+  fi
+
   bkid=$[bkid+1]
-done
+done < <(cat /tmp/brokers)
 
 export KAFKA_BROKER_ID="$myid"
 
 cmd=$cmd"(kafka-server-start $BROKER_CFG 2>&1 > /var/log/kafka.log  &); sleep 5;"
 
+# Tag the instance
+appsVal=$(echo $myApps | awk '{$1=$1;print}' | sed 's/ /,/g')
+
+aws ec2 create-tags --region "${region}" --resources $myInstanceId --tags \
+Key=Name,Value="${kafka_autoscaling_group_name}-broker-$myid" \
+Key=Apps,Value="'$appsVal'"
 
 # Read in env as a new-line separated array.
 EXCLUSIONS="|KAFKA_VERSION|KAFKA_HOME|KAFKA_DEBUG|KAFKA_GC_LOG_OPTS|KAFKA_HEAP_OPTS|KAFKA_JMX_OPTS|KAFKA_JVM_PERFORMANCE_OPTS|KAFKA_LOG|KAFKA_OPTS|"
