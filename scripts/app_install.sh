@@ -4,7 +4,7 @@ set -x
 
 #print input parameters
 echo ${region}
-echo ${kafka_autoscaling_group_name}
+echo ${kafka_broker_prefix}
 echo ${num_brokers}
 echo ${zookeeper_quorum}
 echo ${num_embedded_zks}
@@ -64,11 +64,7 @@ while [ -z "$myHostname" ] ; do
 done
 
 #wait for all brokers to be running
-aws ec2 describe-instances --output text --region "${region}" \
-  --filters 'Name=instance-state-name,Values=running' \
-  --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
-  | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
-  | awk '{print $1" "$2}' > /tmp/brokers
+touch /tmp/brokers
 
 while [ $(cat /tmp/brokers | wc -l) != "${num_brokers}" ]
 do
@@ -76,8 +72,8 @@ do
 
     aws ec2 describe-instances --output text --region "${region}" \
       --filters 'Name=instance-state-name,Values=running' \
-      --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
-      | grep -w "${kafka_autoscaling_group_name}" | sort -k 3 -k 4 -k 5 \
+      --query 'Reservations[].Instances[].[InstanceId,PrivateDnsName,AmiLaunchIndex,LaunchTime,Placement.AvailabilityZone,Tags[?Key == `Name`]|[0].Value ]' \
+      | grep -w "${kafka_broker_prefix}" | sort -k 3 -k 4 -k 5 \
       | awk '{print $1" "$2}' > /tmp/brokers
 done
 
@@ -152,7 +148,6 @@ cmd=$cmd"(kafka-server-start $BROKER_CFG 2>&1 > /var/log/kafka.log  &); sleep 5;
 appsVal=$(echo $myApps | awk '{$1=$1;print}' | sed 's/ /,/g')
 
 aws ec2 create-tags --region "${region}" --resources $myInstanceId --tags \
-Key=Name,Value="${kafka_autoscaling_group_name}-broker-$myid" \
 Key=Apps,Value="'$appsVal'"
 
 # Read in env as a new-line separated array.
