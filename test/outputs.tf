@@ -9,3 +9,7 @@ output "vpc_subnet_ids" {
 output "kafka_bootstrap_servers" {
   value = "${module.kafka_cluster.bootstrap_servers}"
 }
+
+output "kafka_zookeeper_quorum" {
+  value = "${module.kafka_cluster.zookeeper_quorum}"
+}

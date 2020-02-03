@@ -44,11 +44,6 @@ resource "aws_instance" "kafka_cluster" {
     }
 }
 
-locals {
-  kafka_bootstrap_servers = "${join(",", formatlist("%s:9092", aws_instance.kafka_cluster.*.public_ip))}"
-}
-
-
 #wait for kafka-broker nodes to be initialized
 resource "null_resource" "kafka_cluster_initialized" {
     triggers = {
@@ -60,3 +55,15 @@ resource "null_resource" "kafka_cluster_initialized" {
     }
 }
 
+data "aws_instances" "embedded_zk_nodes" {
+  depends_on = ["null_resource.kafka_cluster_initialized"]
+
+  instance_tags = {
+    Apps = "zookeeper-node,kafka-broker"
+  }
+}
+
+locals {
+  kafka_bootstrap_servers   = "${join(",", formatlist("%s:9092", aws_instance.kafka_cluster.*.public_ip))}"
+  zookeeper_quorum          = "${var.zookeeper_quorum == "" ? join(",", formatlist("%s:2181", data.aws_instances.embedded_zk_nodes.public_ips)) : var.zookeeper_quorum}"
+}
