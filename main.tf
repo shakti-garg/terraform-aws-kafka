@@ -56,7 +56,7 @@ resource "null_resource" "kafka_cluster_initialized" {
     }
 
     provisioner "local-exec" {
-        command = "until nc -zv ${element(aws_instance.kafka_cluster.*.public_ip, 0)} 9092; [ $? -eq 0 ]; do sleep 2; done"
+        command = "${path.module}/scripts/wait_for_resource.sh ${join(",", aws_instance.kafka_cluster.*.public_ip)} 9092"
     }
 }
 
