@@ -44,3 +44,19 @@ resource "aws_instance" "kafka_cluster" {
     }
 }
 
+locals {
+  kafka_bootstrap_servers = "${join(",", formatlist("%s:9092", aws_instance.kafka_cluster.*.public_ip))}"
+}
+
+
+#wait for kafka-broker nodes to be initialized
+resource "null_resource" "kafka_cluster_initialized" {
+    triggers = {
+        cluster_instance_ids = "${join(",", aws_instance.kafka_cluster.*.id)}"
+    }
+
+    provisioner "local-exec" {
+        command = "until nc -zv ${element(aws_instance.kafka_cluster.*.public_ip, 0)} 9092; [ $? -eq 0 ]; do sleep 2; done"
+    }
+}
+
