@@ -7,6 +7,7 @@ Terraform module which creates Kafka Messaging Cluster on AWS
 |------|-------------|------|---------|:-----:|
 | broker\_node\_instancetype | Instance type for the Kafka brokers | `string` | `"m4.xlarge"` | no |
 | broker\_node\_linux\_ami | AMI Id of the desired Linux OS for the instances. It currently supports only RHEL-based distro of Amazon Linux. | `string` | n/a | yes |
+| create\_kafka\_cluster | Toggle to control if Kafka-Cluster should be created (it affects almost all resources) | `bool` | `true` | no |
 | keypair\_name | Name of the Public/private key pair, which allows you to connect securely to your instance after it launches | `string` | n/a | yes |
 | name | Logical name for the Kafka-Cluster deployment. This name will also be used to tag the individual broker instances,<br>  so it should be unique across other resources | `string` | n/a | yes |
 | num\_brokers | Number of Kafka brokers to be deployed | `number` | `3` | no |

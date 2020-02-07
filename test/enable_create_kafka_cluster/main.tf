@@ -20,7 +20,7 @@ resource "aws_key_pair" "ssh_key" {
 }
 
 module "kafka_cluster" {
-  source  = "../"
+  source  = "../../"
 
   name    = "my-cluster"
   vpc_id  = "${module.vpc.vpc_id}"

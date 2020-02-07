@@ -1,3 +1,9 @@
+variable "create_kafka_cluster" {
+  type        = bool
+  default     = true
+  description = "Toggle to control if Kafka-Cluster should be created (it affects almost all resources)"
+}
+
 variable "name" {
   type	= string
   description = <<EOT

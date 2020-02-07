@@ -1,4 +1,6 @@
 resource "aws_security_group" "remote_ssh" {
+  count       = var.create_kafka_cluster ? 1 : 0
+
   name        = "remote_ssh_security_group"
   description = "Allow ssh traffic"
   vpc_id      = "${var.vpc_id}"
@@ -12,6 +14,8 @@ resource "aws_security_group" "remote_ssh" {
 }
 
 resource "aws_security_group" "kafka_broker" {
+  count       = var.create_kafka_cluster ? 1 : 0
+
   name        = "kafka_broker_security_group"
   description = "Allow kafka traffic"
   vpc_id      = "${var.vpc_id}"
@@ -39,6 +43,8 @@ resource "aws_security_group" "kafka_broker" {
 }
 
 resource "aws_security_group" "zookeeper_node" {
+  count       = var.create_kafka_cluster ? 1 : 0
+
   name        = "zookeeper_node_security_group"
   description = "Allow zookeeper traffic"
   vpc_id      = "${var.vpc_id}"

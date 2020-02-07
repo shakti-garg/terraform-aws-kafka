@@ -1,9 +1,13 @@
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  count = var.create_kafka_cluster ? 1 : 0
+
   name = "${var.name}-broker-instance-role"
-  role = "${aws_iam_role.ec2_role.name}"
+  role = "${aws_iam_role.ec2_role.*.name[0]}"
 }
 
 resource "aws_iam_role" "ec2_role" {
+  count = var.create_kafka_cluster ? 1 : 0
+
   name = "${var.name}-broker-role"
 
   assume_role_policy = <<EOF
@@ -24,8 +28,10 @@ EOF
 }
 
 resource "aws_iam_role_policy" "ec2_role_policy" {
+  count = var.create_kafka_cluster ? 1 : 0
+
   name = "${var.name}-broker-role-policy"
-  role = "${aws_iam_role.ec2_role.id}"
+  role = "${aws_iam_role.ec2_role.*.id[0]}"
 
   policy = <<EOF
 {

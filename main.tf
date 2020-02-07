@@ -23,7 +23,7 @@ resource "aws_placement_group" "partition_pg" {
 
 #==========Create Kafka Broker nodes==================
 resource "aws_instance" "kafka_cluster" {
-  count              = "${var.num_brokers}"
+  count              = "${var.create_kafka_cluster ? var.num_brokers : 0}"
 
   ami                = "${var.broker_node_linux_ami}"
   instance_type      = "${var.broker_node_instancetype}"
@@ -34,8 +34,8 @@ resource "aws_instance" "kafka_cluster" {
   associate_public_ip_address   = true
 
   key_name                = "${var.keypair_name}"
-  vpc_security_group_ids  = "${var.zookeeper_quorum == "" ? [aws_security_group.remote_ssh.id, aws_security_group.kafka_broker.id, aws_security_group.zookeeper_node.id] : [aws_security_group.remote_ssh.id, aws_security_group.kafka_broker.id]}"
-  iam_instance_profile    = "${aws_iam_instance_profile.ec2_instance_profile.id}"
+  vpc_security_group_ids  = "${var.zookeeper_quorum == "" ? [aws_security_group.remote_ssh.*.id[0], aws_security_group.kafka_broker.*.id[0], aws_security_group.zookeeper_node.*.id[0]] : [aws_security_group.remote_ssh.*.id[0], aws_security_group.kafka_broker.*.id[0]]}"
+  iam_instance_profile    = "${aws_iam_instance_profile.ec2_instance_profile.*.id[0]}"
 
   user_data               = "${data.template_file.user_data_kafka_broker.rendered}"
 
@@ -46,6 +46,8 @@ resource "aws_instance" "kafka_cluster" {
 
 #wait for kafka-broker nodes to be initialized
 resource "null_resource" "kafka_cluster_initialized" {
+    count = var.create_kafka_cluster ? 1 : 0
+
     triggers = {
         cluster_instance_ids = "${join(",", aws_instance.kafka_cluster.*.id)}"
     }
@@ -56,6 +58,8 @@ resource "null_resource" "kafka_cluster_initialized" {
 }
 
 data "aws_instances" "embedded_zk_nodes" {
+  count = var.create_kafka_cluster ? 1 : 0
+
   depends_on = ["null_resource.kafka_cluster_initialized"]
 
   instance_tags = {
@@ -64,6 +68,6 @@ data "aws_instances" "embedded_zk_nodes" {
 }
 
 locals {
-  kafka_bootstrap_servers   = "${join(",", formatlist("%s:9092", aws_instance.kafka_cluster.*.public_ip))}"
-  zookeeper_quorum          = "${var.zookeeper_quorum == "" ? join(",", formatlist("%s:2181", data.aws_instances.embedded_zk_nodes.public_ips)) : var.zookeeper_quorum}"
+  kafka_bootstrap_servers   = var.create_kafka_cluster ? "${join(",", formatlist("%s:9092", aws_instance.kafka_cluster.*.public_ip))}" : ""
+  zookeeper_quorum          = var.create_kafka_cluster ? "${var.zookeeper_quorum == "" ? join(",", formatlist("%s:2181", length(data.aws_instances.embedded_zk_nodes) > 0 ? data.aws_instances.embedded_zk_nodes[0].public_ips : [])) : var.zookeeper_quorum}" : ""
 }
