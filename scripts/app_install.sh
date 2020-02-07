@@ -50,6 +50,32 @@ function updateConfig() {
     fi
 }
 
+function wait_for_service() {
+  until ping_resources $1; [ $? -eq 0 ];
+  do
+    sleep 2;
+  done
+}
+
+function ping_resources() {
+  workers=$1
+  status=0
+
+  for url in $(echo "$workers" | tr "," "\n");
+  do
+    IFS=':' read -a urlparts <<< "$url"
+    nc -zv "$${urlparts[0]}" "$${urlparts[1]}"
+
+    if [ $? -ne 0 ];
+    then
+      status=1
+      break
+    fi
+  done
+
+  return $status
+}
+
 echo "Installing Confluent Platform - Community Edition..."
 install_confluent
 
@@ -113,12 +139,15 @@ if [ "${zookeeper_quorum}" = "" ] ; then
 
     myApps=$myApps" zookeeper-node"
 
-    cmd=$cmd"(zookeeper-server-start $ZK_CFG > /var/log/zookeeper.log &); sleep 5;"
+    cmd=$cmd"(zookeeper-server-start $ZK_CFG > /var/log/zookeeper.log &);"
   fi
 else
   zkconnect=${zookeeper_quorum}
 fi
 
+#command to wait for init of embedded-zookeeper quorum
+yum install -y nc
+cmd=$cmd"(wait_for_service $zkconnect);"
 
 #configure broker and prepare execution command
 export KAFKA_ZOOKEEPER_CONNECT="$zkconnect"
